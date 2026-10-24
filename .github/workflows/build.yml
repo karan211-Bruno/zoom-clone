@@ -1,0 +1,110 @@
+name: Build & Release
+
+on:
+  push:
+    tags: ['v*']  # v1.0.0, v1.0.1 등 태그 푸시 시 실행
+  workflow_dispatch:  # GitHub 웹에서 수동 실행 가능
+
+permissions:
+  contents: write  # Release 생성 권한
+
+jobs:
+  build:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [macos-latest, windows-latest]
+        # Linux도 원하면 추가: os: [macos-latest, windows-latest, ubuntu-latest]
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build TypeScript + Vite
+        run: npm run build
+
+      - name: Build Electron App
+        run: npm run dist
+        env:
+          # 코드 서명 인증서가 있을 때만 설정 (나중에 Apple Developer / Windows 인증서 구매 시)
+          # CSC_LINK: ${{ secrets.CSC_LINK }}
+          # CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # WIN_CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          # WIN_CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+
+      - name: Upload Artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.os }}
+          path: dist-electron/
+          retention-days: 30
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')  # 태그 푸시시에만 Release 생성
+    steps:
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-macos-latest
+          path: dist-mac
+
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: dist-windows-latest
+          path: dist-win
+
+      - name: List files for verification
+        run: |
+          echo "=== macOS files ==="
+          ls -la dist-mac/
+          echo "=== Windows files ==="
+          ls -la dist-win/
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: ZoomClone v${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          body: |
+            ## ZoomClone ${{ github.ref_name }}
+            
+            크로스 플랫폼 화상 회의 애플리케이션 (Electron + React + WebRTC)
+            
+            ### 설치 파일
+            - **macOS (Apple Silicon)**: `.dmg` (드래그 설치) 또는 `.zip` (압축 해제)
+            - **Windows (x64)**: `.exe` (NSIS 설치) 또는 `.exe` (포터블)
+            
+            ### 주요 기능
+            - 🎥 화상 회의 (WebRTC P2P)
+            - 🎤 오디오/비디오 제어
+            - 🖥️ 화면 공유
+            - 💬 채팅 (전체/비공개)
+            - 👥 참가자 관리 (호스트 권한)
+            - ⚙️ 설정 (장치 선택, 환경설정)
+            
+            ### 실행 요구사항
+            - macOS 10.15+ (Catalina 이상)
+            - Windows 10/11 (64-bit)
+          draft: false
+          prerelease: false
+          files: |
+            dist-mac/*.dmg
+            dist-mac/*.zip
+            dist-mac/*.blockmap
+            dist-win/*.exe
+            dist-win/*.blockmap
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+EOF
