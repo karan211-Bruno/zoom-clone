@@ -55,7 +55,16 @@
     "files": [
       "dist/**/*",
       "node_modules/**/*",
-      "package.json"
+      "package.json",
+      "!node_modules/.cache/**/*",
+      "!node_modules/.bin/**/*",
+      "!node_modules/typescript/**/*",
+      "!node_modules/tsx/**/*",
+      "!node_modules/electron-builder/**/*",
+      "!node_modules/@electron/rebuild/**/*"
+    ],
+    "asarUnpack": [
+      "dist/signaling/**/*"
     ],
     "mac": {
       "category": "public.app-category.video",
